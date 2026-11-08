@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.db
+*.sqlite*
+*_debug.txt
+network_requests.json
+local_*.csv
+private_*.csv
+*.zip
+.pytest_cache/
