@@ -1,6 +1,8 @@
 """Public, read-only Project Nyx dashboard; no source URL or write key."""
 from datetime import datetime, timezone
+import os
 import pandas as pd
+import requests
 import streamlit as st
 from storage import draws,predictions
 from model import walkforward
@@ -14,6 +16,42 @@ st.html(
 st.title('🌙 Project Nyx')
 st.caption('Statistical sequence lab · exploratory forecasts, not reliable winning-number predictions')
 
+@st.cache_data(ttl=60,show_spinner=False)
+def goatcounter_total():
+    token=os.getenv('GOATCOUNTER_API_KEY','')
+    if not token:
+        try:
+            token=str(st.secrets.get('GOATCOUNTER_API_KEY',''))
+        except (FileNotFoundError,KeyError):
+            pass
+    if not token:
+        raise RuntimeError('Missing private configuration: GOATCOUNTER_API_KEY')
+
+    response=requests.get(
+        'https://darkdragon.goatcounter.com/api/v0/stats/total',
+        params={'start':'1970-01-01T00:00:00Z'},
+        auth=('',token),
+        headers={'Content-Type':'application/json'},
+        timeout=10,
+    )
+    response.raise_for_status()
+    total=response.json()['total']
+    if not isinstance(total,int) or isinstance(total,bool):
+        raise ValueError('GoatCounter returned an invalid total')
+    return total
+
+@st.fragment(run_every='60s')
+def render_visitor_count():
+    st.markdown('---')
+    try:
+        st.caption(f'All-time visitors: {goatcounter_total():,}')
+    except RuntimeError as error:
+        st.caption(f'Live visitor count unavailable: {error}')
+    except requests.RequestException:
+        st.caption('Live visitor count unavailable: GoatCounter request failed.')
+    except (KeyError,TypeError,ValueError):
+        st.caption('Live visitor count unavailable: GoatCounter returned an invalid response.')
+
 @st.cache_data(ttl=600)
 def load():return draws(),predictions()
 
@@ -21,9 +59,11 @@ try:
     history,guesses=load()
 except Exception:
     st.error('The data service is temporarily unavailable. Check dashboard secrets and database policies.')
+    render_visitor_count()
     st.stop()
 if not history:
     st.info('No data yet. Run the GitHub collection workflow after configuring its secrets.')
+    render_visitor_count()
     st.stop()
 by_draw={int(d['draw_number']):d for d in history}
 latest=history[-1]
@@ -75,3 +115,4 @@ if len(history)>20:
     st.dataframe(model_df,use_container_width=True,hide_index=True)
     st.caption('Lower mean log loss is better. Comparisons use earlier draws only; exploratory comparisons are not proof of a predictive pattern.')
 else:st.info('More draw history is needed for walk-forward testing.')
+render_visitor_count()
