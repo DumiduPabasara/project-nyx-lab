@@ -17,7 +17,7 @@ st.html(
 st.title('🌙 Project Nyx')
 st.caption('Statistical sequence lab · exploratory forecasts, not reliable winning-number predictions')
 
-@st.cache_data(ttl=60,show_spinner=False)
+@st.cache_data(ttl=10,show_spinner=False)
 def goatcounter_total():
     token=os.getenv('GOATCOUNTER_API_KEY','')
     if not token:
@@ -41,13 +41,13 @@ def goatcounter_total():
         raise ValueError('GoatCounter returned an invalid total')
     return total
 
-@st.fragment(run_every='60s')
+@st.fragment(run_every='15s')
 def render_visitor_count():
     st.markdown('---')
     try:
         total=goatcounter_total()
         checked_at=datetime.now(timezone.utc).strftime('%H:%M:%S UTC')
-        st.success(f'GoatCounter connected · {total:,} all-time visitors · checked {checked_at}')
+        st.success(f'GoatCounter connected · {total:,} all-time total · checked {checked_at}')
     except RuntimeError as error:
         logging.warning('GoatCounter unavailable: %s',error)
         st.warning(f'GoatCounter unavailable: {error}')
