@@ -1,5 +1,6 @@
 """Public, read-only Project Nyx dashboard; no source URL or write key."""
 from datetime import datetime, timezone
+import logging
 import os
 import pandas as pd
 import requests
@@ -44,13 +45,19 @@ def goatcounter_total():
 def render_visitor_count():
     st.markdown('---')
     try:
-        st.caption(f'All-time visitors: {goatcounter_total():,}')
+        total=goatcounter_total()
+        checked_at=datetime.now(timezone.utc).strftime('%H:%M:%S UTC')
+        st.success(f'GoatCounter connected · {total:,} all-time visitors · checked {checked_at}')
     except RuntimeError as error:
-        st.caption(f'Live visitor count unavailable: {error}')
-    except requests.RequestException:
-        st.caption('Live visitor count unavailable: GoatCounter request failed.')
+        logging.warning('GoatCounter unavailable: %s',error)
+        st.warning(f'GoatCounter unavailable: {error}')
+    except requests.RequestException as error:
+        status=error.response.status_code if error.response is not None else 'no HTTP response'
+        logging.warning('GoatCounter request failed (%s; %s)',type(error).__name__,status)
+        st.error(f'GoatCounter request failed ({status}). Check the app logs.')
     except (KeyError,TypeError,ValueError):
-        st.caption('Live visitor count unavailable: GoatCounter returned an invalid response.')
+        logging.warning('GoatCounter returned an invalid response.')
+        st.error('GoatCounter returned an invalid response. Check the app logs.')
 
 @st.cache_data(ttl=600)
 def load():return draws(),predictions()
