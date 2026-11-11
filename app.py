@@ -6,6 +6,11 @@ from storage import draws,predictions
 from model import walkforward
 
 st.set_page_config(page_title='Project Nyx',page_icon='🌙',layout='wide')
+st.html(
+    '<script data-goatcounter="https://darkdragon.goatcounter.com/count" '
+    'async src="https://gc.zgo.at/count.js"></script>',
+    unsafe_allow_javascript=True,
+)
 st.title('🌙 Project Nyx')
 st.caption('Statistical sequence lab · exploratory forecasts, not reliable winning-number predictions')
 
