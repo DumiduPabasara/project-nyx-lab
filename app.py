@@ -117,9 +117,10 @@ else:st.info('No saved forecast has been matched against an actual draw yet.')
 
 st.subheader('Walk-forward model comparison')
 if len(history)>20:
-    _,scores=walkforward(history)
+    selected_model,scores=walkforward(history)
     model_df=pd.DataFrame([dict(model=k,**v) for k,v in scores.items()])
+    model_df['selected_by_validation']=model_df['model'].eq(selected_model)
     st.dataframe(model_df,use_container_width=True,hide_index=True)
-    st.caption('Lower mean log loss is better. Comparisons use earlier draws only; exploratory comparisons are not proof of a predictive pattern.')
+    st.caption('The model is selected by validation log loss; later rolling holdout scores are not used for selection, and each forecast uses only earlier draws. Lower log loss and Brier score are better. Holdout log-loss intervals are approximate 95% normal intervals assuming independent draws; small differences are not proof of a predictive pattern.')
 else:st.info('More draw history is needed for walk-forward testing.')
 render_visitor_count()

@@ -14,4 +14,40 @@ class TestNyx(unittest.TestCase):
         self.assertAlmostEqual(sum(vec[0]),1)
         chosen,scores=walkforward(rows)
         self.assertIn(chosen,scores)
+        self.assertEqual(chosen,'uniform')
+        self.assertEqual(scores['uniform']['validation_cases'],7)
+        self.assertEqual(scores['uniform']['test_cases'],8)
+        self.assertIn('test_mean_brier_score',scores['uniform'])
+        self.assertLessEqual(
+            scores['uniform']['test_log_loss_95ci_low'],
+            scores['uniform']['test_mean_log_loss'],
+        )
+        self.assertGreaterEqual(
+            scores['uniform']['test_log_loss_95ci_high'],
+            scores['uniform']['test_mean_log_loss'],
+        )
+
+    def test_holdout_does_not_affect_model_selection(self):
+        rows=[
+            dict(draw_number=i,letter='A' if i%2==0 else 'B',
+                 digits='012345' if i%2==0 else '987654')
+            for i in range(100)
+        ]
+        changed=[dict(row) for row in rows]
+        for row in changed[60:]:
+            row['letter']='Z'
+            row['digits']='999999'
+
+        chosen,scores=walkforward(rows)
+        changed_chosen,changed_scores=walkforward(changed)
+
+        self.assertEqual(chosen,changed_chosen)
+        self.assertEqual(
+            scores['all_history']['validation_mean_log_loss'],
+            changed_scores['all_history']['validation_mean_log_loss'],
+        )
+        self.assertNotEqual(
+            scores['all_history']['test_mean_log_loss'],
+            changed_scores['all_history']['test_mean_log_loss'],
+        )
 if __name__=='__main__':unittest.main()
