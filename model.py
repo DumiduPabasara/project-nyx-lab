@@ -1,7 +1,7 @@
 """Walk-forward statistical baselines; no claim of lottery predictability."""
 import math
 from collections import Counter
-ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+ALPHABET = "ABCDEFGHJKLMNOPQRSTUVWXYZ"
 MODELS = ("uniform", "all_history", "recent_30", "recent_100")
 
 def observed_probs(rows, model, alphabet_size):
@@ -82,5 +82,3 @@ def walkforward(history, min_train=20, max_cases=200):
     eligible = (n for n in MODELS if scored[n]['validation_cases'] >= 20)
     chosen = min(eligible, key=lambda n:scored[n]['validation_mean_log_loss'], default='uniform')
     return chosen, scored
-
-

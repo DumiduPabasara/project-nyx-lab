@@ -6,7 +6,8 @@ import pandas as pd
 import requests
 import streamlit as st
 from storage import draws,predictions
-from model import walkforward
+from model import walkforward, ALPHABET
+from prizes import evaluate_prize, benchmark_odds
 
 st.set_page_config(page_title='Project Nyx',page_icon='🌙',layout='wide')
 st.html(
@@ -103,17 +104,38 @@ for p in guesses:
     # Strictly verify this was generated with history preceding the target draw.
     valid=int(p['training_max_draw'])<int(p['draw_number'])
     hits=sum(x==y for x,y in zip(p['predicted_digits'],observed['digits']))
+    prize=evaluate_prize(p['predicted_letter'],p['predicted_digits'],
+                         observed['letter'],observed['digits'])
     records.append({'draw':p['draw_number'],'forecast':p['predicted_letter']+p['predicted_digits'],
                     'actual':observed['letter']+observed['digits'],
                     'digit_position_hits':hits,'letter_hit':p['predicted_letter']==observed['letter'],
                     'exact_hit':p['predicted_letter']==observed['letter'] and p['predicted_digits']==observed['digits'],
-                    'model':p['model_name'],'valid_training_order':valid})
+                    'model':p['model_name'],'valid_training_order':valid,
+                    'prize_tier':prize.tier,'prize_rs_reference':prize.amount,
+                    'first_consecutive':prize.prefix,'last_consecutive':prize.suffix})
 if records:
     scored=pd.DataFrame(records)
-    st.metric('Exact matches (saved forecasts)',f'{int(scored["exact_hit"].sum())}/{len(scored)}')
-    st.metric('Mean correct digit positions',f'{scored["digit_position_hits"].mean():.2f} / 6',help='Uniform-random expectation is 0.6 out of 6')
+    # Invalid training order means a row could be a hindsight prediction; never count it.
+    eligible=scored[scored['valid_training_order']].copy()
+    if len(eligible)!=len(scored):
+        st.warning('Some stored forecasts are invalid for prospective evaluation; excluded from the summary.')
+    st.metric('Exact matches (valid saved forecasts)',f'{int(eligible["exact_hit"].sum())}/{len(eligible)}')
+    st.metric('Prize-winning forecasts (reference tiers)',
+              f'{int((eligible["prize_rs_reference"]>0).sum())}/{len(eligible)}')
+    st.metric('Reference prize total (not verified winnings)',
+              f'Rs. {int(eligible["prize_rs_reference"].sum()):,}')
+    st.metric('Mean correct digit positions',f'{eligible["digit_position_hits"].mean():.2f} / 6' if len(eligible) else 'N/A',help='Uniform-random expectation is 0.6 out of 6')
+    st.caption('Amounts use the 2024 gazette reference; jackpot varies by draw. This evaluation counts the largest applicable tier, and does not prove a ticket was purchased or paid.')
     st.dataframe(scored.sort_values('draw',ascending=False),use_container_width=True,hide_index=True)
 else:st.info('No saved forecast has been matched against an actual draw yet.')
+
+st.subheader('Prize-aware random baseline')
+odds=benchmark_odds(len(ALPHABET))
+a,b,c=st.columns(3)
+a.metric('Super prize: chance',f'1 in {round(1/odds["super_exact_probability"]):,}')
+b.metric('6 numbers: chance',f'1 in {round(1/odds["six_digits_probability"]):,}')
+c.metric('Any listed prize: chance',f'{odds["any_prize_probability"]:.2%}')
+st.caption('Assumes 25 equally likely letters, six independent uniform digits, and at most one payable prize tier. The any-prize baseline includes letter, first digit, or last digit. Prize-aware scoring measures outcomes, not an increased ability to predict independent draws.')
 
 st.subheader('Walk-forward model comparison')
 if len(history)>20:
