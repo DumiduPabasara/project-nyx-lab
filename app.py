@@ -31,9 +31,7 @@ def goatcounter_total():
 
     response=requests.get(
         'https://darkdragon.goatcounter.com/api/v0/stats/total',
-        params={'start':'1970-01-01T00:00:00Z'},
-        auth=('',token),
-        headers={'Content-Type':'application/json'},
+        headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
         timeout=10,
     )
     response.raise_for_status()
