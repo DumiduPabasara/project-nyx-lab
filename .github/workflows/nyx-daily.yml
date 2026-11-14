@@ -1,6 +1,5 @@
 name: Nyx daily collection and forecast
 on:
-  workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'
       timezone: 'Asia/Colombo'
