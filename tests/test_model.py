@@ -1,6 +1,6 @@
 import unittest
 from collector import parse_draw
-from model import probability_vectors,walkforward
+from model import ALPHABET, probability_vectors,walkforward
 
 class TestNyx(unittest.TestCase):
     def test_parse(self):
@@ -11,7 +11,10 @@ class TestNyx(unittest.TestCase):
         rows=[dict(draw_number=i,letter='A',digits='012345') for i in range(35)]
         vec=probability_vectors(rows,'uniform')
         self.assertEqual(len(vec),7)
-        self.assertAlmostEqual(sum(vec[0]),1)
+        self.assertEqual(len(ALPHABET),25)
+        self.assertNotIn('I',ALPHABET)
+        for position_vector in vec:
+            self.assertAlmostEqual(sum(position_vector),1.0)
         chosen,scores=walkforward(rows)
         self.assertIn(chosen,scores)
         self.assertEqual(chosen,'uniform')

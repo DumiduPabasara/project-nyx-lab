@@ -17,7 +17,7 @@ def observed_probs(rows, model, alphabet_size):
 
 def probability_vectors(history, model):
     letters = [ALPHABET.index(r['letter']) for r in history]
-    vecs = [observed_probs(letters, model, 26)]
+    vecs = [observed_probs(letters, model, len(ALPHABET))]
     for pos in range(6):
         vecs.append(observed_probs([int(r['digits'][pos]) for r in history], model, 10))
     return vecs

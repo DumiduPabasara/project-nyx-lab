@@ -31,6 +31,7 @@ def goatcounter_total():
 
     response=requests.get(
         'https://darkdragon.goatcounter.com/api/v0/stats/total',
+        params={'start':'1970-01-01T00:00:00Z'},
         headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
         timeout=10,
     )
@@ -135,12 +136,51 @@ b.metric('6 numbers: chance',f'1 in {round(1/odds["six_digits_probability"]):,}'
 c.metric('Any listed prize: chance',f'{odds["any_prize_probability"]:.2%}')
 st.caption('Assumes 25 equally likely letters, six independent uniform digits, and at most one payable prize tier. The any-prize baseline includes letter, first digit, or last digit. Prize-aware scoring measures outcomes, not an increased ability to predict independent draws.')
 
-st.subheader('Walk-forward model comparison')
+st.subheader('Nyx 2.0 · statistical model comparison')
 if len(history)>20:
-    selected_model,scores=walkforward(history)
-    model_df=pd.DataFrame([dict(model=k,**v) for k,v in scores.items()])
-    model_df['selected_by_validation']=model_df['model'].eq(selected_model)
+    selected_classical,scores=walkforward(history)
+    model_df=pd.DataFrame([{
+        'model':k,
+        'validation_log_loss':v['validation_mean_log_loss'],
+        'holdout_log_loss':v['test_mean_log_loss'],
+        'holdout_brier':v['test_mean_brier_score'],
+        'holdout_symbol_hits':v['test_mean_symbol_hits'],
+        'holdout_cases':v['test_cases'],
+        'selected_classical':k==selected_classical,
+    } for k,v in scores.items()])
     st.dataframe(model_df,use_container_width=True,hide_index=True)
-    st.caption('The model is selected by validation log loss; later rolling holdout scores are not used for selection, and each forecast uses only earlier draws. Lower log loss and Brier score are better. Holdout log-loss intervals are approximate 95% normal intervals assuming independent draws; small differences are not proof of a predictive pattern.')
-else:st.info('More draw history is needed for walk-forward testing.')
+    st.caption('Classical models are selected using validation log loss. The later holdout is reporting-only. Lower log loss and Brier score are better; small differences do not establish a repeatable lottery pattern.')
+else:
+    st.info('More draw history is needed for walk-forward testing.')
+
+st.subheader('Nyx 2.0 · experimental deep learning')
+latest_saved=max(guesses,key=lambda p:int(p['draw_number'])) if guesses else None
+latest_meta=(latest_saved or {}).get('probabilities') or {}
+deep_report=latest_meta.get('deep_learning') or {}
+if deep_report.get('available'):
+    st.caption('LSTM and GRU are trained by the private scheduled runner. The dashboard reads their saved evaluation; it does not retrain models.')
+    selected_overall=latest_meta.get('selected_model',latest_saved.get('model_name','unknown'))
+    st.metric('Model selected for latest forecast',selected_overall.upper())
+    deep_rows=[]
+    for model_name,model_score in deep_report.get('scores',{}).items():
+        validation=model_score.get('validation') or {}
+        holdout=model_score.get('test') or {}
+        deep_rows.append({
+            'model':model_name.upper(),
+            'validation_log_loss':validation.get('mean_log_loss'),
+            'holdout_log_loss':holdout.get('mean_log_loss'),
+            'holdout_brier':holdout.get('mean_brier_score'),
+            'holdout_symbol_hits':holdout.get('mean_symbol_hits'),
+            'holdout_prize_hits':holdout.get('prize_hit_count'),
+            'mean_reference_prize_rs':holdout.get('mean_reference_prize_rs'),
+            'holdout_cases':holdout.get('cases'),
+        })
+    if deep_rows:
+        st.dataframe(pd.DataFrame(deep_rows),use_container_width=True,hide_index=True)
+    st.caption(f"Lookback: {deep_report.get('lookback_draws', 'N/A')} draws · Validation cases: {deep_report.get('validation_cases', 'N/A')} · Untouched holdout cases: {deep_report.get('test_cases', 'N/A')}. Model choice uses validation log loss, never holdout results.")
+else:
+    reason=deep_report.get('reason') or 'The next scheduled private run will assess whether enough history and the optional PyTorch dependency are available.'
+    st.info(reason)
+
+st.caption('Important: LSTM/GRU are experiments, not proven prediction advantages. Draw results may be independent and random. Prize-hit counts and reference prize values are historical evaluation statistics, not expected future winnings.')
 render_visitor_count()

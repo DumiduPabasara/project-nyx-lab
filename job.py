@@ -7,6 +7,7 @@ import random
 from datetime import date,datetime,timedelta,timezone
 from pathlib import Path
 from model import ALPHABET,probability_vectors,walkforward
+from deep_models import evaluate_deep_models, predict_next
 from storage import draws,insert_draw,insert_prediction,predictions
 
 
@@ -29,8 +30,26 @@ def forecast(history):
     target=history[-1]['draw_number']+1
     if any(p['draw_number']==target for p in predictions(private=True)):
         return f'Draw {target}: already saved'
-    name,scores=walkforward(history)
-    vectors=probability_vectors(history,name)
+    classical_name,scores=walkforward(history)
+    name=classical_name
+    deep_report=evaluate_deep_models(history)
+    if deep_report.get('available'):
+        deep_name=deep_report['selected_model']
+        classical_loss=scores[classical_name]['validation_mean_log_loss']
+        deep_loss=deep_report['scores'][deep_name]['validation']['mean_log_loss']
+        # Deep learning is promoted only when it wins on the same untouched
+        # validation window; the later test window is reporting-only.
+        if deep_loss is not None and classical_loss is not None and deep_loss < classical_loss:
+            name=deep_name
+
+    try:
+        vectors=predict_next(history,name) if name in ('lstm','gru','ensemble') else probability_vectors(history,name)
+    except Exception as exc:
+        # Preserve the established forecast path if optional neural fitting fails.
+        print(f'Neural forecast unavailable ({type(exc).__name__}); using classical model')
+        name=classical_name
+        vectors=probability_vectors(history,name)
+
     digest=hashlib.sha256(f'{target}/{history[-1]["letter"]}/{history[-1]["digits"]}'.encode()).hexdigest()
     rng=random.Random(int(digest,16))
     picks=[rng.choice([i for i,x in enumerate(v) if abs(x-max(v))<1e-12]) for v in vectors]
@@ -38,7 +57,10 @@ def forecast(history):
         predicted_digits=''.join(map(str,picks[1:])),model_name=name,
         training_max_draw=history[-1]['draw_number'],
         created_at=datetime.now(timezone.utc).isoformat(),
-        probabilities={'vectors':vectors,'walkforward':scores})
+        probabilities={'vectors':vectors,'walkforward':scores,
+                       'deep_learning':deep_report,
+                       'selected_model':name,
+                       'selection_rule':'lowest validation log loss; holdout test is reporting-only'})
     return f'Draw {target}: '+('saved' if insert_prediction(record) else 'already saved')+' ('+name+')'
 
 

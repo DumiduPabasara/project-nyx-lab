@@ -1,0 +1,4 @@
+# Optional CPU-only deep-learning dependency used by the private GitHub runner.
+# The collector and classical prediction engine still work if this install fails.
+numpy>=1.26,<3
+torch>=2.2,<3
