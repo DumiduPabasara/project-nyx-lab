@@ -1,6 +1,8 @@
 name: Nyx daily collection and forecast
 on:
   schedule:
+    - cron: '0 0 * * *'
+      timezone: 'Asia/Colombo'
     - cron: '15 6,18 * * *'
       timezone: 'Asia/Colombo'
 permissions:
