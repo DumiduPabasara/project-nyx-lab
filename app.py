@@ -8,7 +8,8 @@ import streamlit as st
 from storage import draws,predictions
 from audit import digit_hit_test, prize_hit_test, randomness_report
 from model import ALPHABET, significantly_better, walkforward
-from prizes import benchmark_odds, evaluate_prize, expected_prize_per_ticket
+from prizes import (TICKET_PRICE, benchmark_odds, evaluate_prize, expected_prize_per_ticket,
+                    return_to_player)
 
 st.set_page_config(page_title='Project Nyx',page_icon='🌙',layout='wide')
 st.html(
@@ -151,12 +152,16 @@ if records:
                    f'Chance of at least {prize_hits} from luck alone: {luck["p_at_least"]:.0%}.')
     st.metric('Reference prize total (not verified winnings)',
               f'Rs. {int(eligible["prize_rs_reference"].sum()):,}')
+    spent=n*TICKET_PRICE
+    st.metric(f'Net if one Rs. {TICKET_PRICE} ticket were bought per forecast',
+              f'Rs. {int(eligible["prize_rs_reference"].sum())-spent:,}',
+              help=f'Reference prizes minus {n} x Rs. {TICKET_PRICE} ticket cost. Hypothetical: no ticket purchase is recorded.')
     st.metric('Mean correct digit positions',f'{eligible["digit_position_hits"].mean():.2f} / 6' if n else 'N/A',help='Uniform-random expectation is 0.6 out of 6')
     if n:
         digit_luck=digit_hit_test(int(eligible['digit_position_hits'].sum()),n)
         st.caption(f'Digit hits: {digit_luck["observed"]} observed vs {digit_luck["expected"]:.1f} expected by chance '
                    f'(chance of at least this many: {digit_luck["p_at_least"]:.0%}).')
-    st.caption('Amounts use the 2024 gazette reference; jackpot varies by draw. This evaluation counts the largest applicable tier, and does not prove a ticket was purchased or paid.')
+    st.caption('Amounts are the official reference prizes (2024 gazette); the Super Prize changes daily, so one fixed reference value is used. Only the single highest applicable tier is counted, and this does not prove a ticket was purchased or paid.')
     st.dataframe(scored.sort_values('draw',ascending=False),use_container_width=True,hide_index=True)
 else:st.info('No saved forecast has been matched against an actual draw yet.')
 
@@ -166,6 +171,8 @@ a,b,c=st.columns(3)
 a.metric('Super prize: chance',f'1 in {round(1/odds["super_exact_probability"]):,}')
 b.metric('6 numbers: chance',f'1 in {round(1/odds["six_digits_probability"]):,}')
 c.metric('Any listed prize: chance',f'{odds["any_prize_probability"]:.2%}')
+st.metric(f'Expected return per Rs. {TICKET_PRICE} ticket',f'{return_to_player(len(ALPHABET)):.1%}',
+          help='Expected prize divided by ticket price, with the Super Prize at its fixed reference value.')
 st.metric('Expected prize per ticket (reference table)',f'Rs. {expected_prize_per_ticket(len(ALPHABET)):,.2f}',
           help='Identical for every possible ticket number under independent uniform draws, so choosing a "better" number cannot change it.')
 st.caption('Assumes 25 equally likely letters, six independent uniform digits, and at most one payable prize tier. The any-prize baseline includes letter, first digit, or last digit. Prize-aware scoring measures outcomes, not an increased ability to predict independent draws.')

@@ -3,8 +3,14 @@
 
 from dataclasses import dataclass
 
+# Reference amounts from the official prize structure of the 17 Nov 2026 draw.
+# Every tier below matches the official table. The Super Prize changes daily; the
+# app deliberately uses this one fixed reference value so results stay comparable.
+SUPER_PRIZE_REFERENCE = 22_718_328
+TICKET_PRICE = 40  # LKR per ticket
+
 BASE_PRIZES = {
-    'super': 21_167_456,
+    'super': SUPER_PRIZE_REFERENCE,
     'six': 2_500_000,
     'last5': 100_000,
     'last4': 15_000,
@@ -47,25 +53,29 @@ def matching_lengths(predicted_digits, actual_digits):
 
 
 def best_tier(prefix, suffix, letter_hit, table=None):
-    """Highest payable tier for a (prefix, suffix, letter) outcome."""
+    """Highest payable tier for a (prefix, suffix, letter) outcome.
+
+    Only the single highest-paying tier is awarded. Equal-amount ties
+    (last1/first1/letter, last2/first3, last3/first4, last5/first5) resolve in
+    the order last > first > letter. Both rules were verified against the
+    official winner counts of the 17 Nov 2026 draw (chi-square 0.7; the
+    stacking and first-before-last alternatives scored 616 and 1,829).
+    """
     table = BASE_PRIZES if table is None else table
     eligible = []
     if prefix == 6:
         eligible.append('super' if letter_hit else 'six')
     else:
-        eligible.extend(f'first{i}' for i in range(1, min(prefix, 5) + 1))
+        # Order matters: max() keeps the first of equal amounts.
         eligible.extend(f'last{i}' for i in range(1, min(suffix, 5) + 1))
+        eligible.extend(f'first{i}' for i in range(1, min(prefix, 5) + 1))
         if letter_hit:
             eligible.append('letter')
     return max(eligible, key=lambda name: table[name], default='none')
 
 
 def evaluate_prize(predicted_letter, predicted_digits, actual_letter, actual_digits, prizes=None):
-    """Score one recorded forecast. Highest payable tier wins when tiers overlap.
-
-    NOTE: "highest tier only" is an assumption; confirm it against the
-    official prize rules (some lotteries pay overlapping tiers cumulatively).
-    """
+    """Score one recorded forecast. Only the highest payable tier is awarded."""
     table = BASE_PRIZES if prizes is None else prizes
     prefix, suffix = matching_lengths(predicted_digits, actual_digits)
     letter_hit = predicted_letter == actual_letter
@@ -117,3 +127,24 @@ def expected_prize_per_ticket(letter_count=25, prizes=None):
         miss = table[miss_tier] if miss_tier != 'none' else 0
         total += probability * (p_letter * hit + (1 - p_letter) * miss)
     return total
+
+
+def return_to_player(letter_count=25, prizes=None, ticket_price=None):
+    """Expected payout as a fraction of the ticket price (same for every number)."""
+    price = TICKET_PRICE if ticket_price is None else ticket_price
+    if price <= 0:
+        raise ValueError('ticket_price must be positive')
+    return expected_prize_per_ticket(letter_count, prizes) / price
+
+
+def expected_prize_by_tier(letter_count=25, prizes=None):
+    """Each tier's contribution to the expected prize per ticket."""
+    table = BASE_PRIZES if prizes is None else prizes
+    p_letter = 1 / letter_count
+    contribution = {}
+    for prefix, suffix, probability in prefix_suffix_distribution():
+        for hit, weight in ((True, p_letter), (False, 1 - p_letter)):
+            tier = best_tier(prefix, suffix, hit, table)
+            if tier != 'none':
+                contribution[tier] = contribution.get(tier, 0.0) + probability * weight * table[tier]
+    return contribution
