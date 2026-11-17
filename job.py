@@ -6,7 +6,7 @@ import os
 import random
 from datetime import date,datetime,timedelta,timezone
 from pathlib import Path
-from model import ALPHABET,probability_vectors,walkforward
+from model import ALPHABET,probability_vectors,significantly_better,walkforward
 from deep_models import evaluate_deep_models, predict_next
 from storage import draws,insert_draw,insert_prediction,predictions
 
@@ -26,7 +26,16 @@ def import_csv(path):
     return count
 
 
+def validate_history(history):
+    """Fail loudly on a malformed stored draw instead of crashing deep inside a model."""
+    for row in history:
+        digits=row['digits']
+        if row['letter'] not in ALPHABET or not (isinstance(digits,str) and len(digits)==6 and digits.isdigit()):
+            raise ValueError(f"Invalid stored draw {row.get('draw_number')}")
+
+
 def forecast(history):
+    validate_history(history)
     target=history[-1]['draw_number']+1
     if any(p['draw_number']==target for p in predictions(private=True)):
         return f'Draw {target}: already saved'
@@ -35,11 +44,14 @@ def forecast(history):
     deep_report=evaluate_deep_models(history)
     if deep_report.get('available'):
         deep_name=deep_report['selected_model']
+        validation=deep_report['scores'][deep_name]['validation']
         classical_loss=scores[classical_name]['validation_mean_log_loss']
-        deep_loss=deep_report['scores'][deep_name]['validation']['mean_log_loss']
-        # Deep learning is promoted only when it wins on the same untouched
+        deep_loss=validation.get('mean_log_loss')
+        # Deep learning is promoted only when it beats the chosen classical model
+        # AND is significantly better than uniform on the same untouched
         # validation window; the later test window is reporting-only.
-        if deep_loss is not None and classical_loss is not None and deep_loss < classical_loss:
+        if (deep_loss is not None and classical_loss is not None and deep_loss<classical_loss
+                and significantly_better(deep_loss,validation.get('log_loss_ci_low'),validation.get('log_loss_ci_high'))):
             name=deep_name
 
     try:
@@ -56,11 +68,11 @@ def forecast(history):
     record=dict(draw_number=target,predicted_letter=ALPHABET[picks[0]],
         predicted_digits=''.join(map(str,picks[1:])),model_name=name,
         training_max_draw=history[-1]['draw_number'],
-        created_at=datetime.now(timezone.utc).isoformat(),
+        # created_at is stamped by the database (trigger), not by this runner.
         probabilities={'vectors':vectors,'walkforward':scores,
                        'deep_learning':deep_report,
                        'selected_model':name,
-                       'selection_rule':'lowest validation log loss; holdout test is reporting-only'})
+                       'selection_rule':'uniform unless a model beats uniform on validation log loss by >2.58 standard errors; holdout test is reporting-only'})
     return f'Draw {target}: '+('saved' if insert_prediction(record) else 'already saved')+' ('+name+')'
 
 

@@ -13,7 +13,9 @@ class DeepModelTests(unittest.TestCase):
         ]
         result = evaluate_deep_models(rows)
         self.assertFalse(result["available"])
-        self.assertIn(str(MIN_HISTORY), result["reason"])
+        # Without PyTorch the missing dependency is reported first; with it, the history requirement.
+        expected = str(MIN_HISTORY) if available() else "PyTorch"
+        self.assertIn(expected, result["reason"])
 
     @unittest.skipUnless(available(), "optional PyTorch/NumPy dependency not installed")
     def test_one_hot_encoding_has_85_features_and_seven_active_symbols(self):

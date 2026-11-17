@@ -6,6 +6,7 @@ import os
 import re
 from datetime import datetime
 from playwright.sync_api import sync_playwright
+from model import ALPHABET
 from storage import insert_draw
 
 DRAW_RE = re.compile(r'\bDraw\s*No\.?\s*:\s*(\d{1,7})\b', re.I)
@@ -32,7 +33,10 @@ def parse_draw(text, expected):
     result = RESULT_RE.search(after_date[:250])
     if result is None:
         return None
-    return dict(draw_number=expected, draw_date=when, letter=result.group(1).upper(), digits=re.sub(r'\s+', '', result.group(2)))
+    letter = result.group(1).upper()
+    if letter not in ALPHABET:  # e.g. 'I' is not used; refuse rather than store a bad row
+        return None
+    return dict(draw_number=expected, draw_date=when, letter=letter, digits=re.sub(r'\s+', '', result.group(2)))
 
 
 def _diagnostics(text, expected, status):
